@@ -4,6 +4,8 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <vector>
+#include <algorithm>
 
 struct Parameters {
     enum Command {
@@ -78,12 +80,10 @@ hnStat top <nb_top_queries> [--from TIMESTAMP] [--to TIMESTAMP] <INPUT_FILE>
     return p;
 }
 
-// Note: in real life I ould have used boost::spirit to parse the TSV, this is not at all a real tsv parser
+// Note: in real life I ould have used boost::spirit to parse the TSV, this is by no mean a real tsv parser
 std::optional<std::pair<u_int64_t, std::string>> parse_line(const std::string& line) {
-    std::istringstream lineStream{line};
-
     std::string timestamp_str, url;
-    std::istringstream tokenStream(timestamp_str);
+    std::istringstream tokenStream(line);
 
     if (! std::getline(tokenStream, timestamp_str, '\t')) {
         return std::nullopt;
@@ -93,7 +93,23 @@ std::optional<std::pair<u_int64_t, std::string>> parse_line(const std::string& l
     }
 
     const u_int64_t ts = std::strtoull(timestamp_str.c_str(), nullptr, 10);
+
+    if (ts == 0) {
+        // 0 is not a possible value for the dataset, we can consider this has been wrongly parsed
+        // std::cout << "not parsed: " << url << "| ts: " << timestamp_str << std::endl;
+        return std::nullopt;
+    }
     return {{ts, url}};
+}
+
+bool keep_line(u_int64_t timestamp, const Parameters params) {
+    if (params.from && timestamp < *params.from) {
+        return false;
+    }
+    if (params.to && timestamp > *params.to) {
+        return false;
+    }
+    return true;
 }
 
 std::unordered_map<std::string, uint> count_entries(const Parameters& params) {
@@ -107,38 +123,50 @@ std::unordered_map<std::string, uint> count_entries(const Parameters& params) {
     auto entries = std::unordered_map<std::string, uint>{};
     std::string line;
     while (std::getline(file, line)) {
-        std::cout << "line: " << line << std::endl;
+        // std::cout << "line: " << line << std::endl;
         const auto ts_url = parse_line(line);
 
         if (! ts_url) {
             // the line is not correctly formated, we skip it
+            // std::cerr << "line " << line << " is not correctly formated, we skip it" << std::endl;
             continue;
         }
-        //TODO filter
+        if (! keep_line(ts_url->first, params)) {
+            // the timestamp is not in the filtered range, we skip it
+            continue;
+        }
         entries[ts_url->second] += 1;
-
-
     }
-
             
     return entries;
 }
 
 void compute_top(const Parameters& params) {
+    if (! params.nb_queries) {
+        return;
+    }
+    const auto counted_entries = count_entries(params);
+
+    auto sorted_entries = std::vector<std::pair<std::string, u_int64_t>>{counted_entries.size()};
     
+    for (const auto& p: counted_entries) {
+        sorted_entries.push_back(p);
+    }
+    std::sort(sorted_entries.begin(), sorted_entries.end(), [](const auto& a, const auto&b) { return a.second > b.second; });
+
+    for (uint i = 0; i < sorted_entries.size() && i < *params.nb_queries; i++) {
+        std::cout << sorted_entries[i].first << " " << sorted_entries[i].second << std::endl;
+    }
 }
 
 void compute_distinct(const Parameters& params) {
     const auto counted_entries = count_entries(params);
+
+    std::cout << counted_entries.size() << std::endl;
 }
 
 int main(int argc, char* argv[]) {
     const auto params = parse_params(argc, argv);
-    std::cout << "bobo "  << params.command 
-    << " from " << *params.from 
-    << " to " << *params.to 
-    << " file " << params.file_name 
-    << std::endl;
 
     if (params.command == Parameters::Command::Distinct) {
         compute_distinct(params);
