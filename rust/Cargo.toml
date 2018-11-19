@@ -1,0 +1,9 @@
+[package]
+name = "hn_stat"
+version = "0.1.0"
+authors = ["antoine-de <antoine.desbordes@gmail.com>"]
+
+[dependencies]
+structopt = "0.2"
+csv = "1"
+itertools = "0.7"

@@ -72,7 +72,11 @@ user    0m2.025s
 sys     0m0.296s
 ```
 
-### Various comments
+## Various comments
 
 * The test was not to use any external library, so a lot of this code could be greatly improved by using boost or range-v3 (and there are not unit tests)
 * The algorithms are explained as comment above the methods `compute_distinct` and `compute_top`
+
+## Rust version
+
+For fun there is also a Rust version available in the `rust/` directory. It has better performance, but I think it's mainly due to a better file parsing.
